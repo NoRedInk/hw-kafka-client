@@ -1,13 +1,7 @@
 with import ./nix/nixpkgs.nix { };
 
 pkgs.mkShell {
-  buildInputs = with pkgs; [
-    openssl
-    zlib
-    rdkafka
-    nettools
-    niv
-  ];
+  buildInputs = with pkgs; [ openssl zlib rdkafka nettools niv ];
 
   shellHook = ''
     PATH=~/.cabal/bin:$PATH
