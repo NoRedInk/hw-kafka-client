@@ -1,4 +1,4 @@
-{ compiler ? "ghc843" }:
+{ compiler ? "ghc865" }:
 
 with rec {
   sources = import ./sources.nix;
