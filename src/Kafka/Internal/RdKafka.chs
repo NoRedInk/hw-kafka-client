@@ -614,12 +614,12 @@ pollRdKafkaConsumer k t = do
 -- rd_kafka_incremental_assign
 {#fun rd_kafka_incremental_assign as ^
     {`RdKafkaTPtr', `RdKafkaTopicPartitionListTPtr'}
-    -> `RdKafkaErrorTPtr' #}
+    -> `RdKafkaErrorTPtr' peekPtr* #}
 
 -- rd_kafka_incremental_unassign
 {#fun rd_kafka_incremental_unassign as ^
     {`RdKafkaTPtr', `RdKafkaTopicPartitionListTPtr'}
-    -> `RdKafkaErrorTPtr' #}
+    -> `RdKafkaErrorTPtr' peekPtr* #}
 
 {#fun rd_kafka_assignment as rdKafkaAssignment'
     {`RdKafkaTPtr', alloca- `Ptr RdKafkaTopicPartitionListT' peekPtr* }
@@ -985,7 +985,13 @@ newRdKafkaTopicT kafkaPtr topic topicConfPtr = do
 -------------------------------------------------------------------------------------------------
 ---- Errors
 
-data RdKafkaErrorT = {}
+data RdKafkaErrorT = RdKafkaErrorT
+  { code :: Int
+  , errstr :: String
+  , fatal :: Bool
+  , retriable :: Bool
+  , txn_requires_abort :: Bool
+  }
 {#pointer *rd_kafka_error_t as RdKafkaErrorTPtr -> RdKafkaErrorT #}
 
 {#fun rd_kafka_error_code as ^
