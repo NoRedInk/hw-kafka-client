@@ -1,4 +1,4 @@
-{ compiler ? "ghc843" }:
+{ compiler ? "ghc8107" }:
 
 with rec {
   sources = import ./sources.nix;
@@ -7,7 +7,7 @@ with rec {
       };
 };
 
-import sources.nixpkgs {
+import sources.nixpkgs-unstable {
   config = {
     packageOverrides = super: let self = super.pkgs; in {
       haskellPackages = super.haskell.packages.${compiler}.override {

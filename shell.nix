@@ -1,11 +1,10 @@
-with import ./nix/nixpkgs.nix { };
-
+with import ./nix/nixpkgs.nix {  } // {system = "x86_64-darwin";};
 pkgs.mkShell {
   buildInputs = with pkgs; [
     openssl
     zlib
     rdkafka
-    nettools
+    # nettools
     niv
     gmp
   ];
