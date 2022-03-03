@@ -325,8 +325,8 @@ closeConsumer (KafkaConsumer (Kafka k) (KafkaConf _ qr statusVar)) = liftIO $
     pure (CallbackPollDisabled, res)
 -----------------------------------------------------------------------------
 newConsumerConf :: ConsumerProperties -> IO KafkaConf
-newConsumerConf ConsumerProperties {cpProps = m, cpCallbacks = cbs} = do
-  conf <- kafkaConf (KafkaProps m)
+newConsumerConf ConsumerProperties {cpProps = m, cpCallbacks = cbs, cpAssigmentStrategy = cas} = do
+  conf <- kafkaConf $ KafkaProps $ M.insert "partition.assignment.strategy" (X.assignmentStrategy cas) m
   forM_ cbs (\(Callback setCb) -> setCb conf)
   return conf
 

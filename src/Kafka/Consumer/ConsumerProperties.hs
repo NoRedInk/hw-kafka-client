@@ -23,6 +23,7 @@ module Kafka.Consumer.ConsumerProperties
 , debugOptions
 , queuedMaxMessagesKBytes
 , callbackPollMode
+, assignmentStrategy
 , module X
 )
 where
@@ -41,7 +42,7 @@ import Kafka.Consumer.Callbacks as X
 
 -- | Whether the callback polling should be done synchronously or not.
 data CallbackPollMode =
-    -- | You have to poll the consumer frequently to handle new messages 
+    -- | You have to poll the consumer frequently to handle new messages
     -- as well as rebalance and keep alive events.
     -- This enables lowering the footprint and having full control over when polling
     -- happens, at the cost of manually managing those events.
@@ -49,17 +50,32 @@ data CallbackPollMode =
     -- | Handle polling rebalance and keep alive events for you in a background thread.
   | CallbackPollModeAsync deriving (Show, Eq)
 
+-- | Assignment strategy. Currently supported: RangeAssignor and CooperativeStickyAssignor
+-- Default to RangeAssignor
+data ConsumerAssignmentStrategy =
+  RangeAssignor
+  | CooperativeStickyAssignor
+
+instance Show ConsumerAssignmentStrategy where
+  show RangeAssignor = "range"
+  show CooperativeStickyAssignor = "cooperative-sticky"
+
+assignmentStrategy :: [ConsumerAssignmentStrategy] -> Text
+assignmentstrategy [] = "range,roundrobin"
+assignmentStrategy (a:as) = Text.pack (show a) <> "," <> assignmentStrategy as
+
 -- | Properties to create 'Kafka.Consumer.Types.KafkaConsumer'.
 data ConsumerProperties = ConsumerProperties
-  { cpProps            :: Map Text Text
-  , cpLogLevel         :: Maybe KafkaLogLevel
-  , cpCallbacks        :: [Callback]
-  , cpCallbackPollMode :: CallbackPollMode
+  { cpProps             :: Map Text Text
+  , cpLogLevel          :: Maybe KafkaLogLevel
+  , cpCallbacks         :: [Callback]
+  , cpCallbackPollMode  :: CallbackPollMode
+  , cpAssigmentStrategy :: [ConsumerAssignmentStrategy]
   }
 
 instance Sem.Semigroup ConsumerProperties where
-  (ConsumerProperties m1 ll1 cb1 _) <> (ConsumerProperties m2 ll2 cb2 cup2) =
-    ConsumerProperties (M.union m2 m1) (ll2 `mplus` ll1) (cb1 `mplus` cb2) cup2
+  (ConsumerProperties m1 ll1 cb1 _ cas1) <> (ConsumerProperties m2 ll2 cb2 cup2 cas2) =
+    ConsumerProperties (M.union m2 m1) (ll2 `mplus` ll1) (cb1 `mplus` cb2) cup2 (cas1 `mplus` cas2)
   {-# INLINE (<>) #-}
 
 -- | /Right biased/ so we prefer newer properties over older ones.
@@ -69,6 +85,7 @@ instance Monoid ConsumerProperties where
     , cpLogLevel          = Nothing
     , cpCallbacks         = []
     , cpCallbackPollMode  = CallbackPollModeAsync
+    , cpAssigmentStrategy = []
     }
   {-# INLINE mempty #-}
   mappend = (Sem.<>)
