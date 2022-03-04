@@ -35,7 +35,7 @@ flag examples
 flag it
   description: Run integration tests
   manual: True
-  default: False
+  default: True
 
 library
   hs-source-dirs:       src

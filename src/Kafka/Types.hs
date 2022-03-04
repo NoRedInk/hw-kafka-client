@@ -34,7 +34,7 @@ import Data.String            (IsString)
 import Data.Text              (Text, isPrefixOf)
 import Data.Typeable          (Typeable)
 import GHC.Generics           (Generic)
-import Kafka.Internal.RdKafka (RdKafkaRespErrT, rdKafkaErr2name, rdKafkaErr2str)
+import Kafka.Internal.RdKafka (RdKafkaRespErrT, rdKafkaErr2name, rdKafkaErr2str, RdKafkaErrorT, RdKafkaErrorTPtr)
 import qualified Data.ByteString as BS
 
 -- | Kafka broker ID
@@ -98,6 +98,7 @@ data KafkaError =
   | KafkaInvalidReturnValue
   | KafkaBadSpecification Text
   | KafkaResponseError RdKafkaRespErrT
+  | KafkaErrorT RdKafkaErrorTPtr
   | KafkaInvalidConfigurationValue Text
   | KafkaUnknownConfigurationKey Text
   | KafkaBadConfiguration
