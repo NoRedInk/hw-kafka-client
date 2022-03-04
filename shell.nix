@@ -7,6 +7,8 @@ pkgs.mkShell {
     # nettools
     niv
     gmp
+    cabal-install
+    ghc
   ];
 
   shellHook = ''
