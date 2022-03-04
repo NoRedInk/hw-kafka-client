@@ -16,18 +16,19 @@ import Kafka.Consumer.Types   (KafkaConsumer (..), RebalanceEvent (..), TopicPar
 import Kafka.Internal.RdKafka
 import Kafka.Internal.Setup   (HasKafka (..), HasKafkaConf (..), Kafka (..), KafkaConf (..), getRdMsgQueue, Callback (..))
 import Kafka.Types            (KafkaError (..), PartitionId (..), TopicName (..))
+import Kafka.Consumer.AssignmentStrategy
 
 import qualified Data.Text as Text
 
 -- | Sets a callback that is called when rebalance is needed.
 rebalanceCallback :: (KafkaConsumer -> RebalanceEvent -> IO ()) -> Callback
 rebalanceCallback callback =
-  Callback $ \kc@(KafkaConf con _ _) -> rdKafkaConfSetRebalanceCb con (realCb kc)
+  Callback $ \kc@(KafkaConf con _ _) cas -> rdKafkaConfSetRebalanceCb con (realCb kc cas)
   where
-    realCb kc k err pl = do
+    realCb kc k cas err pl = do
       k' <- newForeignPtr_ k
       pls <- newForeignPtr_ pl
-      setRebalanceCallback callback (KafkaConsumer (Kafka k') kc) (KafkaResponseError err) pls
+      setRebalanceCallback callback cas (KafkaConsumer (Kafka k') kc) (KafkaResponseError err) pls
 
 -- | Sets a callback that is called when rebalance is needed.
 --
@@ -55,6 +56,7 @@ redirectPartitionQueue (Kafka k) (TopicName t) (PartitionId p) q = do
     Just pq -> rdKafkaQueueForward pq q
 
 setRebalanceCallback :: (KafkaConsumer -> RebalanceEvent -> IO ())
+                          -> [KafkaConsumerAssignmentStrategy]
                           -> KafkaConsumer
                           -> KafkaError
                           -> RdKafkaTopicPartitionListTPtr -> IO ()
