@@ -118,8 +118,8 @@ newConsumer :: MonadIO m
             -> m (Either KafkaError KafkaConsumer)
 newConsumer props (Subscription ts tp) = liftIO $ do
   let cp = case cpCallbackPollMode props of
-            CallbackPollModeAsync -> setCallback (rebalanceCallback (\_ _ -> return ())) <> props
-            CallbackPollModeSync  -> props
+        CallbackPollModeAsync -> setCallback (rebalanceCallback (\_ _ -> return ())) <> props
+        CallbackPollModeSync -> props
   kc@(KafkaConf kc' qref _) <- newConsumerConf cp
   tp' <- topicConf (TopicProps tp)
   _   <- setDefaultTopicConf kc tp'
