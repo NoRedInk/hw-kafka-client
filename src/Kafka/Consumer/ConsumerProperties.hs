@@ -61,7 +61,8 @@ instance Show ConsumerAssignmentStrategy where
   show CooperativeStickyAssignor = "cooperative-sticky"
 
 assignmentStrategy :: [ConsumerAssignmentStrategy] -> Text
-assignmentstrategy [] = "range,roundrobin"
+assignmentStrategy [] = "range,roundrobin"
+assignmentStrategy (a:[]) = Text.pack (show a)
 assignmentStrategy (a:as) = Text.pack (show a) <> "," <> assignmentStrategy as
 
 -- | Properties to create 'Kafka.Consumer.Types.KafkaConsumer'.
