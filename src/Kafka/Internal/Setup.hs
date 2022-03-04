@@ -35,6 +35,7 @@ import Data.Map                (Map)
 import Data.Text               (Text)
 import Foreign.C.String        (peekCString)
 import Foreign.Marshal.Alloc   (allocaBytes)
+import Kafka.Consumer.AssignmentStrategy
 
 import qualified Data.Map  as Map
 import qualified Data.Text as Text
@@ -50,7 +51,8 @@ newtype TopicConf  = TopicConf RdKafkaTopicConfTPtr deriving Show
 -- | Callbacks allow retrieving various information like error occurences, statistics
 -- and log messages.
 -- See `Kafka.Consumer.setCallback` (Consumer) and `Kafka.Producer.setCallback` (Producer) for more details.
-newtype Callback = Callback (KafkaConf -> IO ())
+data Callback = Callback (KafkaConf -> IO ())
+              | RebalanceCallback (KafkaConf ->  [ConsumerAssignmentStrategy] -> IO ())
 
 data CallbackPollStatus = CallbackPollEnabled | CallbackPollDisabled deriving (Show, Eq)
 

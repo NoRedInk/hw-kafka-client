@@ -327,7 +327,11 @@ closeConsumer (KafkaConsumer (Kafka k) (KafkaConf _ qr statusVar)) = liftIO $
 newConsumerConf :: ConsumerProperties -> IO KafkaConf
 newConsumerConf ConsumerProperties {cpProps = m, cpCallbacks = cbs, cpAssigmentStrategy = cas} = do
   conf <- kafkaConf $ KafkaProps $ M.insert "partition.assignment.strategy" (X.assignmentStrategy cas) m
-  forM_ cbs (\(Callback setCb) -> setCb conf cas)
+  forM_ cbs (\cb ->
+               case cb of
+                 Callback setCb -> setCb conf
+                 RebalanceCallback setCb -> setCb conf cas
+            )
   return conf
 
 -- | Subscribes to a given list of topics.

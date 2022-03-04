@@ -23,9 +23,9 @@ import qualified Data.Text as Text
 -- | Sets a callback that is called when rebalance is needed.
 rebalanceCallback :: (KafkaConsumer -> RebalanceEvent -> IO ()) -> Callback
 rebalanceCallback callback =
-  Callback $ \kc@(KafkaConf con _ _) cas -> rdKafkaConfSetRebalanceCb con (realCb kc cas)
+  RebalanceCallback $ \kc@(KafkaConf con _ _) consumerAssignmentStrategies -> rdKafkaConfSetRebalanceCb con (realCb kc consumerAssignmentStrategies)
   where
-    realCb kc k cas err pl = do
+    realCb kc cas k err pl = do
       k' <- newForeignPtr_ k
       pls <- newForeignPtr_ pl
       setRebalanceCallback callback cas (KafkaConsumer (Kafka k') kc) (KafkaResponseError err) pls
@@ -56,11 +56,11 @@ redirectPartitionQueue (Kafka k) (TopicName t) (PartitionId p) q = do
     Just pq -> rdKafkaQueueForward pq q
 
 setRebalanceCallback :: (KafkaConsumer -> RebalanceEvent -> IO ())
-                          -> [KafkaConsumerAssignmentStrategy]
+                          -> [ConsumerAssignmentStrategy]
                           -> KafkaConsumer
                           -> KafkaError
                           -> RdKafkaTopicPartitionListTPtr -> IO ()
-setRebalanceCallback f k e pls = do
+setRebalanceCallback f assignmentStrategies k e pls = do
   ps <- fromNativeTopicPartitionList'' pls
   let assignment = (tpTopicName &&& tpPartition) <$> ps
   let (Kafka kptr) = getKafka k
