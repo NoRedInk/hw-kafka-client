@@ -11,7 +11,6 @@ import Control.Monad.Loops
 import Data.Either
 import Data.Map                (fromList)
 import qualified Data.Set as Set
-import Data.Monoid             ((<>))
 import Kafka.Consumer
 import Kafka.Metadata
 import Kafka.Producer
@@ -109,6 +108,34 @@ spec = do
                 length <$> storeRes `shouldBe` Right 2
                 comRes `shouldBe` Nothing
 
+    describe "Cooperative rebalance consumer" $ do
+
+        specWithProducer "Run producer" $ do
+            it "1. sends 2 messages to test topic" $ \prod -> do
+                res    <- sendMessages (testMessages testTopic) prod
+                res `shouldBe` Right ()
+
+        specWithConsumer "Consumer with per-message commit" cooperativeRebalanceConsumerProps $ do
+            it "2. should receive 2 messages" $ \k -> do
+                res <- receiveMessages k
+                length <$> res `shouldBe` Right 2
+
+                comRes <- forM res . mapM $ commitOffsetMessage OffsetCommit k
+                comRes `shouldBe` Right [Nothing, Nothing]
+
+        specWithProducer "Run producer again" $ do
+            it "3. sends 2 messages to test topic" $ \prod -> do
+                res    <- sendMessages (testMessages testTopic) prod
+                res `shouldBe` Right ()
+
+        specWithConsumer "Consumer after per-message commit" cooperativeRebalanceConsumerProps $ do
+            it "4. should receive 2 messages again" $ \k -> do
+                res <- receiveMessages k
+                comRes <- commitAllOffsets OffsetCommit k
+
+                length <$> res `shouldBe` Right 2
+                comRes `shouldBe` Nothing
+
     describe "Kafka.IntegrationSpec" $ do
         specWithProducer "Run producer" $ do
             it "sends messages to test topic" $ \prod -> do
@@ -140,18 +167,18 @@ spec = do
     describe "Kafka.Consumer.BatchSpec" $ do
         specWithConsumer "Batch consumer" (consumerProps <> groupId "batch-consumer") $ do
             it "should consume first batch" $ \k -> do
-                res <- pollMessageBatch k (Timeout 1000) (BatchSize 5)
+                res <- pollMessageBatch k (Timeout 5000) (BatchSize 5)
                 length res `shouldBe` 5
                 forM_ res (`shouldSatisfy` isRight)
 
             it "should consume second batch with not enough messages" $ \k -> do
-                res <- pollMessageBatch k (Timeout 1000) (BatchSize 50)
+                res <- pollMessageBatch k (Timeout 5000) (BatchSize 50)
                 let res' = Prelude.filter (/= Left (KafkaResponseError RdKafkaRespErrPartitionEof)) res
                 length res' `shouldSatisfy` (< 50)
                 forM_ res' (`shouldSatisfy` isRight)
 
             it "should consume empty batch when there are no messages" $ \k -> do
-                res <- pollMessageBatch k (Timeout 1000) (BatchSize 50)
+                res <- pollMessageBatch k (Timeout 5000) (BatchSize 50)
                 length res `shouldBe` 0
 
     describe "Kafka.Headers.Spec" $ do
@@ -180,7 +207,7 @@ receiveMessages kafka =
     where
         allMessages =
             unfoldrM (\s -> do
-                msg <- pollMessage kafka (Timeout 1000)
+                msg <- pollMessage kafka (Timeout 5000)
                 case (s, msg) of
                     (Skip, Left _)  -> pure $ Just (msg, Skip)
                     (_, Right msg') -> pure $ Just (Right msg', Read)
@@ -217,7 +244,7 @@ runConsumerSpec = do
     comRes `shouldBe` Nothing
 
   it "should get committed" $ \k -> do
-    res <- committed k (Timeout 1000) [(testTopic, PartitionId 0)]
+    res <- committed k (Timeout 5000) [(testTopic, PartitionId 0)]
     res `shouldSatisfy` isRight
 
   it "should get position" $ \k -> do
@@ -225,7 +252,7 @@ runConsumerSpec = do
     res `shouldSatisfy` isRight
 
   it "should get watermark offsets" $ \k -> do
-    res <- sequence <$> watermarkOffsets k (Timeout 1000) testTopic
+    res <- sequence <$> watermarkOffsets k (Timeout 5000) testTopic
     res `shouldSatisfy` isRight
     length <$> res `shouldBe` (Right 1)
 
@@ -240,7 +267,7 @@ runConsumerSpec = do
     res `shouldBe` Right (fromList [(testTopic, [PartitionId 0])])
 
   it "should return all topics metadata" $ \k -> do
-    res <- allTopicsMetadata k (Timeout 1000)
+    res <- allTopicsMetadata k (Timeout 5000)
     res `shouldSatisfy` isRight
     let filterUserTopics m = m { kmTopics = filter (\t -> topicType (tmTopicName t) == User) (kmTopics m) }
     let res' = fmap filterUserTopics res
@@ -253,13 +280,13 @@ runConsumerSpec = do
     hasTopic `shouldBe` True
 
   it "should return topic metadata" $ \k -> do
-    res <- topicMetadata k (Timeout 1000) testTopic
+    res <- topicMetadata k (Timeout 5000) testTopic
     res `shouldSatisfy` isRight
     length . kmBrokers <$> res `shouldBe` Right 1
     length . kmTopics <$> res `shouldBe` Right 1
 
   it "should describe all consumer groups" $ \k -> do
-    res <- allConsumerGroupsInfo k (Timeout 1000)
+    res <- allConsumerGroupsInfo k (Timeout 5000)
     let groups = either (const []) (fmap giGroup) res
     let prefixedGroups = filter isTestGroupId groups
     let resLen = length prefixedGroups
@@ -267,46 +294,46 @@ runConsumerSpec = do
     -- fmap giGroup <$> res `shouldBe` Right [testGroupId]
 
   it "should describe a given consumer group" $ \k -> do
-    res <- consumerGroupInfo k (Timeout 1000) testGroupId
+    res <- consumerGroupInfo k (Timeout 5000) testGroupId
     fmap giGroup <$> res `shouldBe` Right [testGroupId]
 
   it "should describe non-existent consumer group" $ \k -> do
-    res <- consumerGroupInfo k (Timeout 1000) "does-not-exist"
+    res <- consumerGroupInfo k (Timeout 5000) "does-not-exist"
     res `shouldBe` Right []
 
   it "should read topic offsets for time" $ \k -> do
-    res <- topicOffsetsForTime k (Timeout 1000) (Millis 1904057189508) testTopic
+    res <- topicOffsetsForTime k (Timeout 5000) (Millis 1904057189508) testTopic
     res `shouldSatisfy` isRight
     fmap tpOffset <$> res `shouldBe` Right [PartitionOffsetEnd]
 
   it "should seek and return no error" $ \k -> do
-    res <- seek k (Timeout 1000) [TopicPartition testTopic (PartitionId 0) (PartitionOffset 1)]
+    res <- seek k (Timeout 5000) [TopicPartition testTopic (PartitionId 0) (PartitionOffset 1)]
     res `shouldBe` Nothing
-    msg <- pollMessage k (Timeout 1000)
+    msg <- pollMessage k (Timeout 5000)
     crOffset <$> msg `shouldBe` Right (Offset 1)
 
   it "should seek to the beginning" $ \k -> do
-    res <- seek k (Timeout 1000) [TopicPartition testTopic (PartitionId 0) PartitionOffsetBeginning]
+    res <- seek k (Timeout 5000) [TopicPartition testTopic (PartitionId 0) PartitionOffsetBeginning]
     res `shouldBe` Nothing
-    msg <- pollMessage k (Timeout 1000)
+    msg <- pollMessage k (Timeout 5000)
     crOffset <$> msg `shouldBe` Right (Offset 0)
 
   it "should seek to the end" $ \k -> do
-    res <- seek k (Timeout 1000) [TopicPartition testTopic (PartitionId 0) PartitionOffsetEnd]
+    res <- seek k (Timeout 5000) [TopicPartition testTopic (PartitionId 0) PartitionOffsetEnd]
     res `shouldBe` Nothing
-    msg <- pollMessage k (Timeout 1000)
+    msg <- pollMessage k (Timeout 5000)
     crOffset <$> msg `shouldSatisfy` (\x ->
             x == Left (KafkaResponseError RdKafkaRespErrPartitionEof)
         ||  x == Left (KafkaResponseError RdKafkaRespErrTimedOut))
 
   it "should respect out-of-bound offsets (invalid offset)" $ \k -> do
-    res <- seek k (Timeout 1000) [TopicPartition testTopic (PartitionId 0) PartitionOffsetInvalid]
+    res <- seek k (Timeout 5000) [TopicPartition testTopic (PartitionId 0) PartitionOffsetInvalid]
     res `shouldBe` Nothing
-    msg <- pollMessage k (Timeout 1000)
+    msg <- pollMessage k (Timeout 5000)
     crOffset <$> msg `shouldBe` Right (Offset 0)
 
   it "should respect out-of-bound offsets (huge offset)" $ \k -> do
-    res <- seek k (Timeout 1000) [TopicPartition testTopic (PartitionId 0) (PartitionOffset 123456)]
+    res <- seek k (Timeout 5000) [TopicPartition testTopic (PartitionId 0) (PartitionOffset 123456)]
     res `shouldBe` Nothing
-    msg <- pollMessage k (Timeout 1000)
+    msg <- pollMessage k (Timeout 5000)
     crOffset <$> msg `shouldBe` Right (Offset 0)

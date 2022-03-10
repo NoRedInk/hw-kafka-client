@@ -1,14 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Kafka.Consumer.AssignmentStrategy where
+module Kafka.Consumer.AssignmentStrategy
+  (ConsumerAssignmentStrategy (..),
+   assignmentStrategy)
+where
 
-import           Data.Text            (Text)
-import qualified Data.Text            as Text
+import Data.Text (Text)
+import qualified Data.Text as Text
 
 -- | Assignment strategy. Currently supported: RangeAssignor and CooperativeStickyAssignor
 -- Default to RangeAssignor
-data ConsumerAssignmentStrategy =
-  RangeAssignor
+data ConsumerAssignmentStrategy
+  = RangeAssignor
   | CooperativeStickyAssignor
 
 instance Show ConsumerAssignmentStrategy where
@@ -18,5 +21,4 @@ instance Show ConsumerAssignmentStrategy where
 assignmentStrategy :: [ConsumerAssignmentStrategy] -> Text
 assignmentStrategy [] = "range,roundrobin"
 assignmentStrategy [a] = Text.pack (show a)
-assignmentStrategy (a:as) = Text.pack (show a) <> "," <> assignmentStrategy as
-
+assignmentStrategy (a : as) = Text.pack (show a) <> "," <> assignmentStrategy as

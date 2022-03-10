@@ -26,6 +26,7 @@ module Kafka.Consumer.ConsumerProperties
     queuedMaxMessagesKBytes,
     callbackPollMode,
     assignmentStrategy,
+    setAssignmentStrategy,
     module X,
   )
 where
@@ -60,6 +61,9 @@ data ConsumerProperties = ConsumerProperties
     cpCallbackPollMode :: CallbackPollMode,
     cpAssigmentStrategy :: [ConsumerAssignmentStrategy]
   }
+
+setAssignmentStrategy :: [ConsumerAssignmentStrategy] -> ConsumerProperties
+setAssignmentStrategy strategies = mempty {cpAssigmentStrategy = strategies}
 
 instance Sem.Semigroup ConsumerProperties where
   (ConsumerProperties m1 ll1 cb1 _ cas1) <> (ConsumerProperties m2 ll2 cb2 cup2 cas2) =
