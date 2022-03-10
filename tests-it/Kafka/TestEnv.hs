@@ -75,11 +75,11 @@ testSubscription t =
 mkProducer :: IO KafkaProducer
 mkProducer = newProducer producerProps >>= \(Right p) -> pure p
 
-mkConsumerWith :: ConsumerProperties -> IO KafkaConsumer
-mkConsumerWith props = do
+mkConsumerWith :: ConsumerProperties -> TopicName -> IO KafkaConsumer
+mkConsumerWith props topic = do
   waitVar <- newEmptyMVar
   let props' = props <> C.setCallback (rebalanceCallback (\_ -> rebCallback waitVar))
-  (Right c) <- newConsumer props' (testSubscription testTopic)
+  (Right c) <- newConsumer props' (testSubscription topic)
   _ <- readMVar waitVar
   return c
   where
@@ -87,17 +87,17 @@ mkConsumerWith props = do
       (RebalanceAssign _) -> putMVar var True
       _ -> pure ()
 
-specWithConsumer :: String -> ConsumerProperties -> SpecWith KafkaConsumer -> Spec
-specWithConsumer s p f =
-  beforeAll (mkConsumerWith p) $
+specWithConsumer :: String -> ConsumerProperties -> TopicName -> SpecWith KafkaConsumer  -> Spec
+specWithConsumer s p t f =
+  beforeAll (mkConsumerWith p t) $
     afterAll (void . closeConsumer) $
       describe s f
 
 specWithProducer :: String -> SpecWith KafkaProducer -> Spec
 specWithProducer s f = beforeAll mkProducer $ afterAll (void . closeProducer) $ describe s f
 
-specWithKafka :: String -> ConsumerProperties -> SpecWith (KafkaConsumer, KafkaProducer) -> Spec
-specWithKafka s p f =
-  beforeAll ((,) <$> mkConsumerWith p <*> mkProducer) $
+specWithKafka :: String -> ConsumerProperties -> TopicName -> SpecWith (KafkaConsumer, KafkaProducer) -> Spec
+specWithKafka s p t f =
+  beforeAll ((,) <$> mkConsumerWith p t <*> mkProducer) $
     afterAll (\(consumer, producer) -> void $ closeProducer producer >> closeConsumer consumer) $
       describe s f

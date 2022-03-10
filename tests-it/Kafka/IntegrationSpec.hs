@@ -29,7 +29,7 @@ spec = do
                 res    <- sendMessages (testMessages testTopic) prod
                 res `shouldBe` Right ()
 
-        specWithConsumer "Consumer with per-message commit" consumerProps $ do
+        specWithConsumer "Consumer with per-message commit" consumerProps testTopic $ do
             it "2. should receive 2 messages" $ \k -> do
                 res <- receiveMessages k
                 length <$> res `shouldBe` Right 2
@@ -42,7 +42,7 @@ spec = do
                 res    <- sendMessages (testMessages testTopic) prod
                 res `shouldBe` Right ()
 
-        specWithConsumer "Consumer after per-message commit" consumerProps $ do
+        specWithConsumer "Consumer after per-message commit" consumerProps testTopic $ do
             it "4. should receive 2 messages again" $ \k -> do
                 res <- receiveMessages k
                 comRes <- commitAllOffsets OffsetCommit k
@@ -56,7 +56,7 @@ spec = do
                 res    <- sendMessages (testMessages testTopic) prod
                 res `shouldBe` Right ()
 
-        specWithConsumer "Consumer with no auto store" consumerPropsNoStore $ do
+        specWithConsumer "Consumer with no auto store" consumerPropsNoStore testTopic $ do
             it "2. should receive 2 messages without storing" $ \k -> do
                 res <- receiveMessages k
                 length <$> res `shouldBe` Right 2
@@ -69,7 +69,7 @@ spec = do
                 res    <- sendMessages (testMessages testTopic) prod
                 res `shouldBe` Right ()
 
-        specWithConsumer "Consumer after commit without store" consumerPropsNoStore $ do
+        specWithConsumer "Consumer after commit without store" consumerPropsNoStore testTopic $ do
             it "4. should receive 4 messages and store them" $ \k -> do
                 res <- receiveMessages k
                 storeRes <- forM res . mapM $ storeOffsetMessage k
@@ -84,7 +84,7 @@ spec = do
                 res    <- sendMessages (testMessages testTopic) prod
                 res `shouldBe` Right ()
 
-        specWithConsumer "Consumer after commit with store" consumerPropsNoStore $ do
+        specWithConsumer "Consumer after commit with store" consumerPropsNoStore testTopic $ do
             it "6. should receive 2 messages" $ \k -> do
                 res <- receiveMessages k
                 storeRes <- forM res $ mapM (storeOffsetMessage k)
@@ -94,7 +94,7 @@ spec = do
                 length <$> storeRes `shouldBe` Right 2
                 comRes `shouldBe` Nothing
 
-        specWithKafka "Part 3 - Consume after committing stored offsets" consumerPropsNoStore $ do
+        specWithKafka "Part 3 - Consume after committing stored offsets" consumerPropsNoStore testTopic $ do
             it "5. sends 2 messages to test topic" $ \(_, prod) -> do
                 res    <- sendMessages (testMessages testTopic) prod
                 res `shouldBe` Right ()
@@ -115,7 +115,7 @@ spec = do
                 res    <- sendMessages (testMessages cooperativeTestTopic) prod
                 res `shouldBe` Right ()
 
-        specWithConsumer "Consumer with per-message commit" cooperativeRebalanceConsumerProps $ do
+        specWithConsumer "Consumer with per-message commit" cooperativeRebalanceConsumerProps cooperativeTestTopic  $ do
             it "2. should receive 2 messages" $ \k -> do
                 res <- receiveMessages k
                 length <$> res `shouldBe` Right 2
@@ -128,7 +128,7 @@ spec = do
                 res    <- sendMessages (testMessages cooperativeTestTopic) prod
                 res `shouldBe` Right ()
 
-        specWithConsumer "Consumer after per-message commit" cooperativeRebalanceConsumerProps $ do
+        specWithConsumer "Consumer after per-message commit" cooperativeRebalanceConsumerProps cooperativeTestTopic  $ do
             it "4. should receive 2 messages again" $ \k -> do
                 res <- receiveMessages k
                 comRes <- commitAllOffsets OffsetCommit k
@@ -161,11 +161,11 @@ spec = do
                   DeliveryFailure _ _ -> False
                   NoMessageError _    -> False
 
-        specWithConsumer "Run consumer with async polling" (consumerProps <> groupId (makeGroupId "async")) runConsumerSpec
-        specWithConsumer "Run consumer with sync polling" (consumerProps <> groupId (makeGroupId "sync") <> callbackPollMode CallbackPollModeSync) runConsumerSpec
+        specWithConsumer "Run consumer with async polling" (consumerProps <> groupId (makeGroupId "async")) testTopic runConsumerSpec
+        specWithConsumer "Run consumer with sync polling" (consumerProps <> groupId (makeGroupId "sync") <> callbackPollMode CallbackPollModeSync) testTopic runConsumerSpec
 
     describe "Kafka.Consumer.BatchSpec" $ do
-        specWithConsumer "Batch consumer" (consumerProps <> groupId "batch-consumer") $ do
+        specWithConsumer "Batch consumer" (consumerProps <> groupId "batch-consumer") testTopic $ do
             it "should consume first batch" $ \k -> do
                 res <- pollMessageBatch k (Timeout 5000) (BatchSize 5)
                 length res `shouldBe` 5
@@ -184,7 +184,7 @@ spec = do
     describe "Kafka.Headers.Spec" $ do
         let testHeaders = headersFromList [("a-header-name", "a-header-value"), ("b-header-name", "b-header-value")]
 
-        specWithKafka "Headers consumer/producer" consumerProps $ do
+        specWithKafka "Headers consumer/producer" consumerProps testTopic $ do
               it "1. sends 2 messages to test topic enriched with headers" $ \(k, prod) -> do
                   void $ receiveMessages k
 
