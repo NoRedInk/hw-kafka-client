@@ -66,7 +66,19 @@ setRebalanceCallback f assignmentStrategies k e pls = do
   let (Kafka kptr) = getKafka k
 
   case assignmentStrategies of
-    [RangeAssignor] ->
+    CooperativeStickyAssignor : _ ->
+      case e of
+        KafkaResponseError RdKafkaRespErrAssignPartitions -> do
+            f k (RebalanceBeforeAssign assignment)
+            void $ rdKafkaIncrementalAssign kptr pls
+            f k (RebalanceAssign assignment)
+
+        KafkaResponseError RdKafkaRespErrRevokePartitions -> do
+            f k (RebalanceBeforeRevoke assignment)
+            void $ rdKafkaIncrementalUnassign kptr pls
+            f k (RebalanceRevoke assignment)
+        x -> error $ "Rebalance: UNKNOWN response: " <> show x
+    _ ->
       case e of
         KafkaResponseError RdKafkaRespErrAssignPartitions -> do
             f k (RebalanceBeforeAssign assignment)
@@ -91,16 +103,3 @@ setRebalanceCallback f assignmentStrategies k e pls = do
             void $ newForeignPtr_ nullPtr >>= rdKafkaAssign kptr
             f k (RebalanceRevoke assignment)
         x -> error $ "Rebalance: UNKNOWN response: " <> show x
-    [CooperativeStickyAssignor] ->
-      case e of
-        KafkaResponseError RdKafkaRespErrAssignPartitions -> do
-            f k (RebalanceBeforeAssign assignment)
-            void $ rdKafkaIncrementalAssign kptr pls
-            f k (RebalanceAssign assignment)
-
-        KafkaResponseError RdKafkaRespErrRevokePartitions -> do
-            f k (RebalanceBeforeRevoke assignment)
-            void $ rdKafkaIncrementalUnassign kptr pls
-            f k (RebalanceRevoke assignment)
-        x -> error $ "Rebalance: UNKNOWN response: " <> show x
-    _ -> error $ "Rebalance: UNKNOWN AssignmentStrategy " <> show assignmentStrategies
