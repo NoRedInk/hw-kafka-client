@@ -32,6 +32,9 @@ testTopic =
     TopicName . Text.pack <$> getEnv "KAFKA_TEST_TOPIC" `catch` \(_ :: SomeException) -> return $ testPrefix <> "-topic"
 {-# NOINLINE testTopic #-}
 
+cooperativeTestTopic :: TopicName
+cooperativeTestTopic = TopicName "KAFKA_COOPERATIVE_TEST_TOPIC"
+
 testGroupId :: ConsumerGroupId
 testGroupId = ConsumerGroupId (Text.pack testPrefix)
 
@@ -51,7 +54,9 @@ consumerProps =
     <> noAutoCommit
 
 cooperativeRebalanceConsumerProps :: ConsumerProperties
-cooperativeRebalanceConsumerProps = consumerProps <> setAssignmentStrategy [CooperativeStickyAssignor]
+cooperativeRebalanceConsumerProps = consumerProps
+  <> setAssignmentStrategy [CooperativeStickyAssignor]
+  <> groupId (makeGroupId "CooperativeStickyAssignorGroup")
 
 consumerPropsNoStore :: ConsumerProperties
 consumerPropsNoStore = consumerProps <> noAutoOffsetStore

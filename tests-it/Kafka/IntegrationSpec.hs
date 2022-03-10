@@ -112,7 +112,7 @@ spec = do
 
         specWithProducer "Run producer" $ do
             it "1. sends 2 messages to test topic" $ \prod -> do
-                res    <- sendMessages (testMessages testTopic) prod
+                res    <- sendMessages (testMessages cooperativeTestTopic) prod
                 res `shouldBe` Right ()
 
         specWithConsumer "Consumer with per-message commit" cooperativeRebalanceConsumerProps $ do
@@ -125,7 +125,7 @@ spec = do
 
         specWithProducer "Run producer again" $ do
             it "3. sends 2 messages to test topic" $ \prod -> do
-                res    <- sendMessages (testMessages testTopic) prod
+                res    <- sendMessages (testMessages cooperativeTestTopic) prod
                 res `shouldBe` Right ()
 
         specWithConsumer "Consumer after per-message commit" cooperativeRebalanceConsumerProps $ do
