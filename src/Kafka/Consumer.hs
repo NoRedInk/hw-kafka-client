@@ -151,7 +151,7 @@ pollMessage c@(KafkaConsumer _ (KafkaConf _ qr _)) (Timeout ms) = liftIO $ do
   mbq <- readIORef qr
   case mbq of
     Nothing -> rdKafkaConsumerPoll (getRdKafka c) ms >>= fromMessagePtr
-    Just q  -> rdKafkaConsumeQueue q (fromIntegral ms) >>= fromMessagePtr
+    Just q -> rdKafkaConsumeQueue q (fromIntegral ms) >>= fromMessagePtr
 
 -- | Polls up to 'BatchSize' messages.
 -- Unlike 'pollMessage' this function does not return usual "timeout" errors.

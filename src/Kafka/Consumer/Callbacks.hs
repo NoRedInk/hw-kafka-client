@@ -1,24 +1,25 @@
 {-# LANGUAGE BangPatterns #-}
+
 module Kafka.Consumer.Callbacks
-( rebalanceCallback
-, offsetCommitCallback
-, module X
-)
+  ( rebalanceCallback,
+    offsetCommitCallback,
+    module X,
+  )
 where
 
-import Control.Arrow          ((&&&))
-import Control.Monad          (forM_, void)
-import Foreign.ForeignPtr     (newForeignPtr_)
-import Foreign.Ptr            (nullPtr)
-import Kafka.Callbacks        as X
-import Kafka.Consumer.Convert (fromNativeTopicPartitionList', fromNativeTopicPartitionList'')
-import Kafka.Consumer.Types   (KafkaConsumer (..), RebalanceEvent (..), TopicPartition (..))
-import Kafka.Internal.RdKafka
-import Kafka.Internal.Setup   (HasKafka (..), HasKafkaConf (..), Kafka (..), KafkaConf (..), getRdMsgQueue, Callback (..))
-import Kafka.Types            (KafkaError (..), PartitionId (..), TopicName (..))
-import Kafka.Consumer.AssignmentStrategy
-
+import Control.Arrow ((&&&))
+import Control.Monad (forM_, void)
 import qualified Data.Text as Text
+import qualified Debug.Trace
+import Foreign.ForeignPtr (newForeignPtr_)
+import Foreign.Ptr (nullPtr)
+import Kafka.Callbacks as X
+import Kafka.Consumer.AssignmentStrategy
+import Kafka.Consumer.Convert (fromNativeTopicPartitionList', fromNativeTopicPartitionList'')
+import Kafka.Consumer.Types (KafkaConsumer (..), RebalanceEvent (..), TopicPartition (..))
+import Kafka.Internal.RdKafka
+import Kafka.Internal.Setup (Callback (..), HasKafka (..), HasKafkaConf (..), Kafka (..), KafkaConf (..), getRdMsgQueue)
+import Kafka.Types (BatchSize (BatchSize), KafkaError (..), PartitionId (..), TopicName (..))
 
 -- | Sets a callback that is called when rebalance is needed.
 rebalanceCallback :: (KafkaConsumer -> RebalanceEvent -> IO ()) -> Callback
@@ -55,11 +56,13 @@ redirectPartitionQueue (Kafka k) (TopicName t) (PartitionId p) q = do
     Nothing -> return ()
     Just pq -> rdKafkaQueueForward pq q
 
-setRebalanceCallback :: (KafkaConsumer -> RebalanceEvent -> IO ())
-                          -> [ConsumerAssignmentStrategy]
-                          -> KafkaConsumer
-                          -> KafkaError
-                          -> RdKafkaTopicPartitionListTPtr -> IO ()
+setRebalanceCallback ::
+  (KafkaConsumer -> RebalanceEvent -> IO ()) ->
+  [ConsumerAssignmentStrategy] ->
+  KafkaConsumer ->
+  KafkaError ->
+  RdKafkaTopicPartitionListTPtr ->
+  IO ()
 setRebalanceCallback f assignmentStrategies k e pls = do
   ps <- fromNativeTopicPartitionList'' pls
   let assignment = (tpTopicName &&& tpPartition) <$> ps
@@ -69,37 +72,46 @@ setRebalanceCallback f assignmentStrategies k e pls = do
     CooperativeStickyAssignor : _ ->
       case e of
         KafkaResponseError RdKafkaRespErrAssignPartitions -> do
-            f k (RebalanceBeforeAssign assignment)
-            void $ rdKafkaIncrementalAssign kptr pls
-            f k (RebalanceAssign assignment)
+          f k (RebalanceBeforeAssign assignment)
+          void $ rdKafkaIncrementalAssign kptr pls
 
+          mbq <- getRdMsgQueue $ getKafkaConf k
+          case mbq of
+            Nothing -> pure ()
+            Just mq -> do
+              void $ rdKafkaPausePartitions kptr pls
+              forM_ ps (\tp -> redirectPartitionQueue (getKafka k) (tpTopicName tp) (tpPartition tp) mq)
+              void $ rdKafkaResumePartitions kptr pls
+
+          f k (RebalanceAssign assignment)
         KafkaResponseError RdKafkaRespErrRevokePartitions -> do
-            f k (RebalanceBeforeRevoke assignment)
-            void $ rdKafkaIncrementalUnassign kptr pls
-            f k (RebalanceRevoke assignment)
+          f k (RebalanceBeforeRevoke assignment)
+
+          void $ rdKafkaIncrementalUnassign kptr pls
+
+          f k (RebalanceRevoke assignment)
         x -> error $ "Rebalance: UNKNOWN response: " <> show x
     _ ->
       case e of
         KafkaResponseError RdKafkaRespErrAssignPartitions -> do
-            f k (RebalanceBeforeAssign assignment)
-            void $ rdKafkaAssign kptr pls
+          f k (RebalanceBeforeAssign assignment)
+          void $ rdKafkaAssign kptr pls
 
-            mbq <- getRdMsgQueue $ getKafkaConf k
-            case mbq of
-              Nothing -> pure ()
-              Just mq -> do
-                {- Magnus Edenhill:
-                    If you redirect after assign() it means some messages may be forwarded to the single consumer queue,
-                    so either do it before assign() or do: assign(); pause(); redirect; resume()
-                -}
-                void $ rdKafkaPausePartitions kptr pls
-                forM_ ps (\tp -> redirectPartitionQueue (getKafka k) (tpTopicName tp) (tpPartition tp) mq)
-                void $ rdKafkaResumePartitions kptr pls
+          mbq <- getRdMsgQueue $ getKafkaConf k
+          case mbq of
+            Nothing -> pure ()
+            Just mq -> do
+              {- Magnus Edenhill:
+                  If you redirect after assign() it means some messages may be forwarded to the single consumer queue,
+                  so either do it before assign() or do: assign(); pause(); redirect; resume()
+              -}
+              void $ rdKafkaPausePartitions kptr pls
+              forM_ ps (\tp -> redirectPartitionQueue (getKafka k) (tpTopicName tp) (tpPartition tp) mq)
+              void $ rdKafkaResumePartitions kptr pls
 
-            f k (RebalanceAssign assignment)
-
+          f k (RebalanceAssign assignment)
         KafkaResponseError RdKafkaRespErrRevokePartitions -> do
-            f k (RebalanceBeforeRevoke assignment)
-            void $ newForeignPtr_ nullPtr >>= rdKafkaAssign kptr
-            f k (RebalanceRevoke assignment)
+          f k (RebalanceBeforeRevoke assignment)
+          void $ newForeignPtr_ nullPtr >>= rdKafkaAssign kptr
+          f k (RebalanceRevoke assignment)
         x -> error $ "Rebalance: UNKNOWN response: " <> show x
