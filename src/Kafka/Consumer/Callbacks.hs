@@ -65,27 +65,42 @@ setRebalanceCallback f assignmentStrategies k e pls = do
   let assignment = (tpTopicName &&& tpPartition) <$> ps
   let (Kafka kptr) = getKafka k
 
-  case e of
-    KafkaResponseError RdKafkaRespErrAssignPartitions -> do
-        f k (RebalanceBeforeAssign assignment)
-        void $ rdKafkaAssign kptr pls
+  case assignmentStrategies of
+    [RangeAssignor] ->
+      case e of
+        KafkaResponseError RdKafkaRespErrAssignPartitions -> do
+            f k (RebalanceBeforeAssign assignment)
+            void $ rdKafkaAssign kptr pls
 
-        mbq <- getRdMsgQueue $ getKafkaConf k
-        case mbq of
-          Nothing -> pure ()
-          Just mq -> do
-            {- Magnus Edenhill:
-                If you redirect after assign() it means some messages may be forwarded to the single consumer queue,
-                so either do it before assign() or do: assign(); pause(); redirect; resume()
-            -}
-            void $ rdKafkaPausePartitions kptr pls
-            forM_ ps (\tp -> redirectPartitionQueue (getKafka k) (tpTopicName tp) (tpPartition tp) mq)
-            void $ rdKafkaResumePartitions kptr pls
+            mbq <- getRdMsgQueue $ getKafkaConf k
+            case mbq of
+              Nothing -> pure ()
+              Just mq -> do
+                {- Magnus Edenhill:
+                    If you redirect after assign() it means some messages may be forwarded to the single consumer queue,
+                    so either do it before assign() or do: assign(); pause(); redirect; resume()
+                -}
+                void $ rdKafkaPausePartitions kptr pls
+                forM_ ps (\tp -> redirectPartitionQueue (getKafka k) (tpTopicName tp) (tpPartition tp) mq)
+                void $ rdKafkaResumePartitions kptr pls
 
-        f k (RebalanceAssign assignment)
+            f k (RebalanceAssign assignment)
 
-    KafkaResponseError RdKafkaRespErrRevokePartitions -> do
-        f k (RebalanceBeforeRevoke assignment)
-        void $ newForeignPtr_ nullPtr >>= rdKafkaAssign kptr
-        f k (RebalanceRevoke assignment)
-    x -> error $ "Rebalance: UNKNOWN response: " <> show x
+        KafkaResponseError RdKafkaRespErrRevokePartitions -> do
+            f k (RebalanceBeforeRevoke assignment)
+            void $ newForeignPtr_ nullPtr >>= rdKafkaAssign kptr
+            f k (RebalanceRevoke assignment)
+        x -> error $ "Rebalance: UNKNOWN response: " <> show x
+    [CooperativeStickyAssignor] ->
+      case e of
+        KafkaResponseError RdKafkaRespErrAssignPartitions -> do
+            f k (RebalanceBeforeAssign assignment)
+            void $ rdKafkaIncrementalAssign kptr pls
+            f k (RebalanceAssign assignment)
+
+        KafkaResponseError RdKafkaRespErrRevokePartitions -> do
+            f k (RebalanceBeforeRevoke assignment)
+            void $ rdKafkaIncrementalUnassign kptr pls
+            f k (RebalanceRevoke assignment)
+        x -> error $ "Rebalance: UNKNOWN response: " <> show x
+    _ -> error $ "Rebalance: UNKNOWN AssignmentStrategy " <> show assignmentStrategies
