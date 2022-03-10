@@ -78,6 +78,10 @@ case "$cmd" in
     cabal-clean
     ;;
 
+  format)
+    stylish-haskell -i -r src
+    ;;
+
   *)
     echo "Unrecognised command: $cmd"
     exit 1
