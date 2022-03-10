@@ -9,6 +9,7 @@ pkgs.mkShell {
     gmp
     cabal-install
     ghc
+    stylish-haskell
   ];
 
   shellHook = ''
